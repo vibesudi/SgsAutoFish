@@ -12,7 +12,7 @@
 将代码克隆到本地电脑。
 
 ```bash
-git clone https://github.com/Elevo4/TKAutoFisher.git
+git clone https://github.com/vibesudi/SgsAutoFish.git
 ```
 
 2.**安装环境**
