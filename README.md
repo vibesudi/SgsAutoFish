@@ -3,7 +3,9 @@
 ## **项目简介**: 
 
 这是是一个自动化脚本，通过模拟鼠标操作，实现自动钓鱼，解放双手
-初版代码来源于 https://github.com/KeNanXiaoLin/sgsminigame
+初版代码来源于 
+- https://github.com/KeNanXiaoLin/sgsminigame
+- https://github.com/Elevo4/TKAutoFisher
 
 ## **使用步骤**
 
