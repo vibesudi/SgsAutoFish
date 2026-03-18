@@ -1,0 +1,54 @@
+direction_icon_positions:
+  01_up: !!python/tuple
+  - 461
+  - 617
+  02_left: !!python/tuple
+  - 346
+  - 735
+  03_un: !!python/tuple
+  - 462
+  - 849
+  04_right: !!python/tuple
+  - 579
+  - 733
+  05_wind: !!python/tuple
+  - 1467
+  - 617
+  06_fire: !!python/tuple
+  - 1352
+  - 733
+  07_ray: !!python/tuple
+  - 1467
+  - 847
+  08_electricity: !!python/tuple
+  - 1581
+  - 733
+low_pressure_color: !!python/tuple
+- 99
+- 77
+- 66
+original_rod_color: !!python/tuple
+- 198
+- 195
+- 198
+pressure_indicator_pos: !!python/tuple
+- 1192
+- 160
+retry_button_center: !!python/tuple
+- 1297
+- 835
+rod_position: !!python/tuple
+- 417
+- 779
+start_fishing_pos: !!python/tuple
+- 1514
+- 782
+use_bait_button_pos: !!python/tuple
+- 1140
+- 309
+window_size: !!python/tuple
+- 163
+- 33
+- 1602
+- 946
+window_title: ABC

@@ -9,11 +9,12 @@ class Config:
     """配置类，管理所有配置项"""
     
     # 窗口配置
-    WINDOW_TITLE: Final[str] = "AMuMu"  # 窗口标题
     WINDOW_SIZE: Final[tuple[int, int, int, int]] = (163, 33, 1602, 946) # **禁止修改，修改完可能图片检测不匹配
+    WINDOW_TITLE: Final[str] = "ABC"  # 窗口标题
     
     # 游戏配置
-    ROD_RETRIEVE_INTERVAL: Final[int] = 14 # 钓鱼时收杆的间隔
+    #ROD_RETRIEVE_INTERVAL: Final[int] = 14 # 钓鱼时收杆的间隔
+    ROD_RETRIEVE_INTERVAL: Final[int] = 13  # 钓鱼时收杆(爆发)的间隔，高等级鱼竿可缩短此时间
     FISHING_CLICK_INTERVAL: Final[float] = 0.08 # 钓鱼时点击的间隔
     
     # 路径配置
@@ -24,7 +25,7 @@ class Config:
     
     # 根据是否打包成exe选择不同的资源路径
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        IMAGE_DIR: Final[Path] = Path(getattr(sys, '_MEIPASS', BASE_DIR)) / "data"
+        IMAGE_DIR: Final[Path] = Path(getattr(sys, '_MEIPASS', BASE_DIR)) / "images"
     else:
         IMAGE_DIR: Final[Path] = BASE_DIR / "images"
     

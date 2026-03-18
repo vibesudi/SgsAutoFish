@@ -72,9 +72,8 @@ class WindowManager:
         # 设置窗口位置和大小，确保截图区域准确
         win32gui.SetWindowPos(hwnd, None, *config.window_size, 0)
         # win32gui.SetWindowPos(hwnd, None, 0,0,0,0, win32con.SWP_NOSIZE)
-        logging.info(str(WindowManager.get_window_rect(hwnd)))
         time.sleep(0.5)  # 等待窗口稳定
-
+        # logging.info(str(WindowManager.get_window_rect(hwnd)))
 
 # ... existing code ...
 
@@ -253,8 +252,9 @@ class FishingStateManager:
             case FishState.CATCH_FISH:
                 # 检测到压力条，进入正式钓鱼阶段
                 if self.ui_recognizer.check_fishing_ui(current_img):
-                    # FISHING 页面已就绪，但有些元素状态重置需要时间，比如挥杆
-                    time.sleep(2)
+                    # FISHING 页面已就绪，但有些元素状态重置需要时间，比如挥杆 ？
+                    # time.sleep(2) 2秒过长，改为0.2秒
+                    time.sleep(0.2)
                     self.current_state = FishState.FISHING
 
             case FishState.FISHING:
@@ -344,8 +344,8 @@ class FishingPositionDetector:
 
         # 匹配拉杆位置（中心点）
         rod_pos = ImageProcessor.match_template(fishing_img, push_rod_icon)
-        # 匹配压力条位置（左侧 25% 处，用于检测颜色变化）
-        pressure_pos = ImageProcessor.match_template(fishing_img, pressure_img, position=(0.25, 0.5))
+        # 匹配压力条位置（左侧 30% 处，用于检测颜色变化, 25%会导致进化失败）
+        pressure_pos = ImageProcessor.match_template(fishing_img, pressure_img, position=(0.3, 0.5))
 
         # 转换为全局坐标
         self.config.rod_position = (
@@ -405,7 +405,7 @@ class FishingPositionDetector:
                 pos[0] + bottom_half_size[0],
                 pos[1] + bottom_half_size[1]
             )
-
+        #logging.info(f"方向图标位置：{self.config.direction_icon_positions}")
         ConfigManager.write_yaml(self.config.__dict__)
 
 
@@ -437,7 +437,7 @@ class FishingActionExecutor:
         """处理鱼饵不足状态 - 点击使用鱼饵按钮"""
         MouseController.click(self.config.use_bait_button_pos)
 
-    def handle_catch_fish_state(self) -> None:
+    def handle_catch_fish_state(self) -> Optional[FishState]:
         """处理捕鱼状态 - 定时点击防止鱼跑掉"""
         click_interval = 0.485
         current_time = time.time()
@@ -447,7 +447,8 @@ class FishingActionExecutor:
         if current_time - self.fishing_click_time > click_interval:
             MouseController.click(self.config.start_fishing_pos)
             self.fishing_click_time = current_time
-
+            return FishState.CAST_ROD
+        return None
 
     def handle_ongoing_fishing(self) -> None:
         """处理持续钓鱼状态 - 核心玩法：收线、拉杆、压力控制"""
@@ -595,9 +596,9 @@ class FishingUIRecognizer:
         return ImageProcessor.is_match_template(img, pressure_img)
 
     def check_instant_kill_ui(self, img: np.ndarray) -> bool:
-        """检查秒杀界面 - 匹配"上"字图标"""
-        up_button = cv2.imread(str(Config.UP_IMAGE))
-        return ImageProcessor.is_match_template(img, up_button)
+        """检查秒杀界面 - 匹配"风"字图标"""
+        wind_image = cv2.imread(str(Config.WIND_IMAGE))
+        return ImageProcessor.is_match_template(img, wind_image)
 
     def check_end_fishing_ui(self, img: np.ndarray) -> bool:
         """检查结束钓鱼界面 - 匹配"再来一次"按钮"""
@@ -679,7 +680,9 @@ class FishingGame:
 
             # 捕鱼状态 - 持续点击防止鱼跑掉
             case FishState.CATCH_FISH:
-                self.action_executor.handle_catch_fish_state()
+                next_state = self.action_executor.handle_catch_fish_state()
+                if next_state:
+                    self.state_manager.current_state = next_state
 
             # 钓鱼中状态 - 执行核心钓鱼玩法
             case FishState.FISHING:
