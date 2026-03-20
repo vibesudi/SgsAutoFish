@@ -14,8 +14,10 @@ class Config:
     
     # 游戏配置
     #ROD_RETRIEVE_INTERVAL: Final[int] = 14 # 钓鱼时收杆的间隔
-    ROD_RETRIEVE_INTERVAL: Final[int] = 13  # 钓鱼时收杆(爆发)的间隔，高等级鱼竿可缩短此时间
-    FISHING_CLICK_INTERVAL: Final[float] = 0.08 # 钓鱼时点击的间隔
+    ROD_RETRIEVE_INTERVAL: Final[int] = 14  # 钓鱼时收杆(爆发)的间隔，高等级鱼竿可缩短此时间
+    FISHING_CLICK_INTERVAL: Final[float] = 0.11 # 钓鱼时点击的间隔
+    MOUSE_CLICK_INTERVAL: Final[float] = 0.04 # 鼠标操作延时
+    COOLDOWN_TIME: Final[float] = 0.25
     
     # 路径配置
     BASE_DIR: Final[Path] = Path(__file__).parent.absolute()

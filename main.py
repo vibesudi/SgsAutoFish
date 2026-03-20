@@ -344,8 +344,8 @@ class FishingPositionDetector:
 
         # 匹配拉杆位置（中心点）
         rod_pos = ImageProcessor.match_template(fishing_img, push_rod_icon)
-        # 匹配压力条位置（左侧 30% 处，用于检测颜色变化, 25%会导致进化失败）
-        pressure_pos = ImageProcessor.match_template(fishing_img, pressure_img, position=(0.3, 0.5))
+        # 匹配压力条位置（左侧 30% 处，用于检测颜色变化, 25%会导致进化失败, 0.31 会断线）
+        pressure_pos = ImageProcessor.match_template(fishing_img, pressure_img, position=(0.30, 0.5))
 
         # 转换为全局坐标
         self.config.rod_position = (
@@ -415,11 +415,13 @@ class FishingActionExecutor:
     def __init__(self, config: GameConfig):
         self.config = config
         self.fishing_click_time = 0  # 记录上次点击时间
-        self.rod_retrieve_time = 0  # 记录上次收杆时间
+        self.rod_retrieve_time = 0  # 记录上次收杆(爆发)时间
+        self.first_pressure = 0  # 钓鱼中是否首次达到压力过高()
 
     def resset_time(self):
         self.fishing_click_time = 0
         self.rod_retrieve_time = 0
+        self.first_pressure = 0
 
     def handle_default_state(self) -> None:
         """处理默认状态 - 点击开始钓鱼按钮"""
@@ -453,8 +455,10 @@ class FishingActionExecutor:
     def handle_ongoing_fishing(self) -> None:
         """处理持续钓鱼状态 - 核心玩法：收线、拉杆、压力控制"""
         current_time = time.time()
-        click_interval = Config.FISHING_CLICK_INTERVAL
-        pressure_check_interval = click_interval * 3
+        click_interval = 0.01
+        pressure_check_interval = Config.COOLDOWN_TIME # 张力过高冷却时间
+        if self.first_pressure == 1:
+            click_interval = Config.FISHING_CLICK_INTERVAL
 
         # 检查收杆 - 定期收杆防止断线
         if current_time - self.rod_retrieve_time > Config.ROD_RETRIEVE_INTERVAL:
@@ -465,11 +469,14 @@ class FishingActionExecutor:
             current_pressure_color = pyautogui.pixel(*self.config.pressure_indicator_pos)
             # 压力条颜色改变，说明压力增加，需要延迟点击
             if current_pressure_color != self.config.low_pressure_color:
-                self.fishing_click_time = current_time + pressure_check_interval
-            # 压力条颜色未改变，点击收线
+                self.fishing_click_time = current_time + pressure_check_interval # 压力增加, 延迟点击
+                self.first_pressure = 1
+                logging.info(f"压力过高:{str(current_time)}-------------------------------")
             else:
+                # 压力条颜色未改变，点击收线
                 MouseController.click(self.config.start_fishing_pos)
                 self.fishing_click_time = current_time
+                logging.info(f"点击收线:{str(current_time)}")
 
         # 拉竿检查 - 检测拉杆是否移动，如果移动则反向拉动
         current_rod_color = pyautogui.pixel(*self.config.rod_position)
@@ -490,7 +497,7 @@ class FishingActionExecutor:
             self.config.rod_position[1],
             -100, 0
         )
-
+    # 爆发
     def handle_rod_retrieve(self) -> None:
         """处理收杆 - 向上滑动鼠标"""
         MouseController.press_mouse_move(
@@ -708,7 +715,7 @@ class FishingGame:
     def run(self) -> None:
         """运行游戏主循环 - 启动状态检测线程和执行循环"""
         try:
-            pyautogui.PAUSE = Config.FISHING_CLICK_INTERVAL / 2  # 设置鼠标操作延迟
+            pyautogui.PAUSE = Config.MOUSE_CLICK_INTERVAL # 设置鼠标操作延迟
             WindowManager.handle_window(self.config)  # 初始化窗口
 
             # 启动状态检测线程

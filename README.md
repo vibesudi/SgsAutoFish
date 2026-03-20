@@ -12,7 +12,7 @@
 - **Esc** 键退出
 
 ### 方案一 ：
-- 直接下载dist目录下 **AutoFish.exe**
+- 直接下载 https://github.com/vibesudi/SgsAutoFish/releases **AutoFish.exe**
 
 ### 方案二：开发调式
 
@@ -50,7 +50,7 @@ pip3 install -r requirements.txt
 
 比如使用的是雷电模拟器，名称就是雷电模拟器
 
-4.**打包 exe**: 
+6.**打包 exe**: 
 ```
 pyinstaller -F -w --add-data "images;images" --add-data "generate/config.yaml;generate" -i app.ico -n AutoFish main.py
 ```
