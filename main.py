@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import yaml
 import keyboard
-from threading import Thread
+from threading import Thread, Lock
 from enum import Enum, auto
 from typing import Optional, Tuple, Dict, Any
 from dataclasses import dataclass
@@ -68,7 +68,7 @@ class WindowManager:
         if not hwnd:
             raise ValueError(f"未找到标题为 {config.window_title} 的窗口")
 
-        WindowManager.bring_to_front(hwnd)
+        # WindowManager.bring_to_front(hwnd)
         # 设置窗口位置和大小，确保截图区域准确
         win32gui.SetWindowPos(hwnd, None, *config.window_size, 0)
         # win32gui.SetWindowPos(hwnd, None, 0,0,0,0, win32con.SWP_NOSIZE)
@@ -196,6 +196,17 @@ class MouseController:
         """点击指定位置 - 用于按钮点击操作"""
         pyautogui.click(position)
 
+    @staticmethod
+    def click_fast(position: Tuple[int, int]) -> None:
+        """快速点击 - 使用 pyautogui 但临时禁用 PAUSE
+        适用于需要精确时序的场景
+        """
+        old_pause = pyautogui.PAUSE
+        pyautogui.PAUSE = 0  # 临时禁用延迟
+        try:
+            pyautogui.click(position)
+        finally:
+            pyautogui.PAUSE = old_pause
 
 class FishingStateManager:
     """负责状态管理和转换的类 - 识别当前游戏处于哪个阶段"""
@@ -417,11 +428,13 @@ class FishingActionExecutor:
         self.fishing_click_time = 0  # 记录上次点击时间
         self.rod_retrieve_time = 0  # 记录上次收杆(爆发)时间
         self.first_pressure = 0  # 钓鱼中是否首次达到压力过高()
+        self.time_lock = Lock()  # 时间变量锁
 
     def resset_time(self):
-        self.fishing_click_time = 0
-        self.rod_retrieve_time = 0
-        self.first_pressure = 0
+        with self.time_lock:
+            self.fishing_click_time = 0
+            self.rod_retrieve_time = 0
+            self.first_pressure = 0
 
     def handle_default_state(self) -> None:
         """处理默认状态 - 点击开始钓鱼按钮"""
@@ -452,36 +465,98 @@ class FishingActionExecutor:
             return FishState.CAST_ROD
         return None
 
+    def handle_ongoing_fishing1(self) -> None:
+        """处理持续钓鱼状态 - 核心玩法：收线、拉杆、压力控制"""
+        with self.time_lock:
+            current_time  = time.time()
+            base_click_interval = 0.01
+            pressure_check_interval = Config.COOLDOWN_TIME # 张力过高冷却时间 0.3
+
+            # 根据压力状态选择点击间隔
+            if self.first_pressure == 0:
+                target_interval = base_click_interval # 0.01
+            else:
+                target_interval = Config.FISHING_CLICK_INTERVAL # 0.11
+
+            # 检查收杆 - 定期收杆防止断线
+            if self.rod_retrieve_time > 0 and current_time - self.rod_retrieve_time > Config.ROD_RETRIEVE_INTERVAL:
+                logging.info(f"爆发------")
+                self.handle_rod_retrieve()
+                self.fishing_click_time = current_time + 2 # 爆发间隔
+                return  # 收杆后本回合不点击
+
+            # 检查是否到达点击时机
+            elapsed_time = current_time - self.fishing_click_time
+            if elapsed_time >= target_interval:
+                # 执行点击
+                MouseController.click_fast(self.config.start_fishing_pos)
+                # 更新下次点击基准时间：本次点击完成时间 + 目标间隔
+                click_end  = time.time()
+                self.fishing_click_time = click_end + target_interval
+                logging.info(f"点击收线：{click_end:.4f}s")
+
+                # 检测压力条颜色（是否达到130）
+                current_pressure_color = pyautogui.pixel(*self.config.pressure_indicator_pos)
+                # 压力条颜色改变，说明压力增加，需要延迟点击
+                if current_pressure_color != self.config.low_pressure_color:
+                    # 计算补偿时间：目标间隔 + 冷却时间 - 已过去的时间
+                    delay_until = current_time + pressure_check_interval - target_interval
+                    self.fishing_click_time = delay_until
+                    self.first_pressure = 1
+                    logging.info(f"压力过高，-------延迟至：{delay_until:.3f}")
+
+            # 拉竿检查 - 检测拉杆是否移动，如果移动则反向拉动
+            current_rod_color = pyautogui.pixel(*self.config.rod_position)
+            if current_rod_color != self.config.original_rod_color:
+                self.handle_rod_movement()
+
     def handle_ongoing_fishing(self) -> None:
         """处理持续钓鱼状态 - 核心玩法：收线、拉杆、压力控制"""
-        current_time = time.time()
-        click_interval = 0.01
-        pressure_check_interval = Config.COOLDOWN_TIME # 张力过高冷却时间
-        if self.first_pressure == 1:
-            click_interval = Config.FISHING_CLICK_INTERVAL
+        with self.time_lock:
+        # if True:
+            current_time = time.time()
+            base_click_interval = 0.01
+            pressure_check_interval = Config.COOLDOWN_TIME # 张力过高冷却时间 0.3
 
-        # 检查收杆 - 定期收杆防止断线
-        if current_time - self.rod_retrieve_time > Config.ROD_RETRIEVE_INTERVAL:
-            self.handle_rod_retrieve()
-
-        # 检查点击操作 - 通过压力条颜色判断是否需要收线
-        if current_time - self.fishing_click_time >= click_interval:
-            current_pressure_color = pyautogui.pixel(*self.config.pressure_indicator_pos)
-            # 压力条颜色改变，说明压力增加，需要延迟点击
-            if current_pressure_color != self.config.low_pressure_color:
-                self.fishing_click_time = current_time + pressure_check_interval # 压力增加, 延迟点击
-                self.first_pressure = 1
-                logging.info(f"压力过高:{str(current_time)}-------------------------------")
+            # 根据压力状态选择点击间隔
+            if self.first_pressure == 1:
+                target_interval = Config.FISHING_CLICK_INTERVAL # 0.11
             else:
-                # 压力条颜色未改变，点击收线
-                MouseController.click(self.config.start_fishing_pos)
-                self.fishing_click_time = current_time
-                logging.info(f"点击收线:{str(current_time)}")
+                target_interval = base_click_interval
 
-        # 拉竿检查 - 检测拉杆是否移动，如果移动则反向拉动
-        current_rod_color = pyautogui.pixel(*self.config.rod_position)
-        if current_rod_color != self.config.original_rod_color:
-            self.handle_rod_movement()
+            # 检查收杆 - 定期收杆防止断线
+            if current_time - self.rod_retrieve_time > Config.ROD_RETRIEVE_INTERVAL:
+                logging.info(f"爆发------")
+                self.handle_rod_retrieve()
+                return  # 收杆后本回合不点击
+
+            # 检查是否到达点击时机
+            elapsed_time = current_time - self.fishing_click_time
+            if elapsed_time >= target_interval:
+                # 获取压力条颜色
+                current_pressure_color = pyautogui.pixel(*self.config.pressure_indicator_pos)
+
+                # 压力条颜色改变，说明压力增加，需要延迟点击
+                if current_pressure_color != self.config.low_pressure_color:
+                    # 计算补偿时间：目标间隔 + 冷却时间 - 已过去的时间
+                    delay_until = current_time + pressure_check_interval - target_interval
+                    self.fishing_click_time = delay_until
+                    self.first_pressure = 1
+                    logging.info(f"压力过高，-------延迟至：{delay_until:.3f}")
+
+                else:
+                    # 压力正常，立即点击
+                    MouseController.click_fast(self.config.start_fishing_pos)
+                    # 更新下次点击时间：当前时间 + 目标间隔 - 操作耗时（补偿）
+                    complete_time = time.time()
+                    self.fishing_click_time = complete_time
+
+                    logging.info(f"点击收线：{complete_time:.4f}s")
+
+            # 拉竿检查 - 检测拉杆是否移动，如果移动则反向拉动
+            current_rod_color = pyautogui.pixel(*self.config.rod_position)
+            if current_rod_color != self.config.original_rod_color:
+                self.handle_rod_movement()
 
     def handle_rod_movement(self) -> None:
         """处理拉杆移动 - 左右晃动鼠标抵消鱼的拉力"""
@@ -720,11 +795,17 @@ class FishingGame:
 
             # 启动状态检测线程
             state_check_thread = Thread(target=self.check_current_UI)
+            state_check_thread.daemon = True  # 设置为守护线程
             state_check_thread.start()
 
             # 主循环 - 根据状态执行动作
             while self.state_manager.current_state != FishState.EXIT:
                 self._handle_state()
+                # 动态调整休眠时间：钓鱼阶段不休眠，其他阶段短暂休眠
+                if self.state_manager.current_state == FishState.FISHING:
+                    time.sleep(0.0001)  # 最小休眠，保证响应速度
+                else:
+                    time.sleep(0.001)  # 其他阶段可适当延长
 
             # 保存最终配置
             ConfigManager.write_yaml(self.config.__dict__)
